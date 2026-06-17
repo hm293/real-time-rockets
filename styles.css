@@ -39,51 +39,6 @@ body {
   pointer-events: none;
 }
 
-/* ---------- EARTH FROM ORBIT ---------- */
-.earth {
-  position: fixed;
-  left: 50%;
-  bottom: -62vw;
-  width: 130vw;
-  height: 130vw;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(40% 35% at 30% 22%, rgba(120, 200, 255, 0.55), transparent 60%),
-    radial-gradient(55% 45% at 72% 32%, rgba(60, 130, 230, 0.55), transparent 60%),
-    radial-gradient(circle at 50% 38%, #2b6fd6 0%, #1b4ea3 35%, #0a2a63 62%, #061a40 100%);
-  box-shadow:
-    0 -30px 120px -20px rgba(70, 150, 255, 0.55),
-    inset 0 40px 120px -30px rgba(180, 230, 255, 0.65);
-}
-/* atmospheric rim light */
-.earth-atmo {
-  position: absolute;
-  inset: -3vw;
-  border-radius: 50%;
-  background: transparent;
-  box-shadow:
-    inset 0 26px 70px -10px rgba(150, 220, 255, 0.85),
-    0 0 90px 10px rgba(80, 170, 255, 0.45);
-}
-/* drifting "continents / clouds" */
-.earth-clouds {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  opacity: 0.5;
-  mix-blend-mode: screen;
-  background:
-    radial-gradient(18% 9% at 28% 30%, rgba(190, 235, 200, 0.8), transparent 70%),
-    radial-gradient(14% 7% at 52% 24%, rgba(220, 245, 255, 0.7), transparent 70%),
-    radial-gradient(22% 10% at 68% 40%, rgba(160, 210, 180, 0.7), transparent 70%),
-    radial-gradient(12% 6% at 40% 46%, rgba(230, 250, 255, 0.7), transparent 70%),
-    radial-gradient(16% 8% at 80% 26%, rgba(200, 240, 255, 0.6), transparent 70%);
-  animation: spin 140s linear infinite;
-}
-
 /* ---------- FLYING ROCKETS ---------- */
 #rocketLayer {
   position: fixed;
@@ -109,6 +64,33 @@ body {
   background: linear-gradient(90deg, transparent, rgba(255, 170, 90, 0.9));
   border-radius: 4px;
   filter: blur(1px);
+}
+
+/* floating Elon (very serious, very scientific) */
+.flyelon {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  will-change: transform;
+}
+.flyelon .head {
+  width: 54px; height: 54px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 30px;
+  background: radial-gradient(circle at 35% 30%, #ffe7c7, #e9b486 70%, #c98f5f);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 22px rgba(120, 180, 255, 0.6);
+  animation: bob 2.2s ease-in-out infinite;
+}
+.flyelon .tag {
+  font-family: "Orbitron", sans-serif; font-size: 10px; letter-spacing: 2px;
+  color: var(--ink); background: rgba(10, 14, 31, 0.7);
+  border: 1px solid var(--panel-brd); border-radius: 999px; padding: 2px 8px;
+}
+@keyframes bob {
+  0%, 100% { transform: translateY(-3px); }
+  50% { transform: translateY(3px); }
 }
 
 .mono { font-variant-numeric: tabular-nums; }
@@ -165,23 +147,18 @@ body {
   background-size: 46px 46px;
   mask-image: radial-gradient(700px 380px at 30% 30%, #000 30%, transparent 75%);
 }
-.kicker {
-  font-family: "Orbitron", sans-serif; font-size: 12px;
-  letter-spacing: 5px; color: var(--accent); margin-bottom: 18px;
-}
-.hero h1 {
+.hero .title {
   font-family: "Orbitron", sans-serif; font-weight: 900;
-  font-size: clamp(48px, 11vw, 128px); line-height: 0.92;
-  letter-spacing: -1px; margin-bottom: 22px;
+  font-size: clamp(30px, 5vw, 52px); line-height: 1.05;
+  letter-spacing: 0.5px; margin-bottom: 10px;
 }
-.hero h1 .glow {
-  background: linear-gradient(120deg, var(--accent), var(--accent-2) 60%, var(--hot));
+.hero .title .accent {
+  background: linear-gradient(120deg, var(--accent), var(--accent-2) 70%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  text-shadow: 0 0 60px rgba(92, 242, 214, 0.35);
 }
-.lede {
-  max-width: 560px; font-size: clamp(16px, 2.2vw, 20px);
-  color: var(--ink-dim); font-weight: 300;
+.hero .subtitle {
+  font-size: clamp(15px, 2.2vw, 20px);
+  color: var(--ink-dim); font-weight: 400; letter-spacing: 0.3px;
 }
 
 /* ---------- NEXT / COUNTDOWN ---------- */
@@ -404,7 +381,7 @@ body {
 .verdict-body { padding: 26px 22px; }
 .verdict-big {
   font-family: "Orbitron", sans-serif; font-weight: 900;
-  font-size: clamp(28px, 6vw, 60px); line-height: 1.02; letter-spacing: -0.5px;
+  font-size: clamp(24px, 4.5vw, 42px); line-height: 1.05; letter-spacing: -0.3px;
   background: linear-gradient(120deg, var(--gold), var(--hot) 70%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   text-shadow: 0 0 50px rgba(255, 180, 90, 0.25);
@@ -462,7 +439,6 @@ body {
   0%, 100% { transform: rotate(-1.5deg) scale(1); }
   50% { transform: rotate(1.5deg) scale(1.04); }
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 720px) {
   .stats { grid-template-columns: repeat(2, 1fr); }

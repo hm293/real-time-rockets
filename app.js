@@ -103,6 +103,40 @@
     setTimeout(launchOne, 5000);
   }
 
+  /* ---------- 1c. A FLOATING ELON ---------- */
+  function elon() {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const layer = $("rocketLayer");
+
+    function floatBy() {
+      const el = document.createElement("div");
+      el.className = "flyelon";
+      el.innerHTML = `<div class="head">🧑‍🚀</div><div class="tag">ELON?</div>`;
+      layer.appendChild(el);
+
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const leftToRight = Math.random() > 0.5;
+      const y = vh * (0.12 + Math.random() * 0.4);
+      const from = leftToRight ? -90 : vw + 90;
+      const to = leftToRight ? vw + 90 : -90;
+      const dur = 16000 + Math.random() * 10000;
+
+      const anim = el.animate(
+        [
+          { transform: `translate(${from}px, ${y}px)`, opacity: 0 },
+          { offset: 0.1, opacity: 1 },
+          { offset: 0.9, opacity: 1 },
+          { transform: `translate(${to}px, ${y - 40}px)`, opacity: 0 },
+        ],
+        { duration: dur, easing: "ease-in-out" }
+      );
+      anim.onfinish = () => { el.remove(); setTimeout(floatBy, 12000 + Math.random() * 18000); };
+    }
+
+    setTimeout(floatBy, 4000);
+  }
+
   /* ---------- 2. CLOCK ---------- */
   function clock() {
     const el = $("clock");
@@ -244,28 +278,40 @@
     const n = tripLaunches.length;
     const goNow = tripLaunches.filter((l) => l.status === "GO").length;
 
+    // the launch sitting just BEFORE the window — the one that could slip in
+    const before = launches
+      .filter((l) => { const t = Date.parse(l.net); return !isNaN(t) && t < TRIP_START; })
+      .sort((a, b) => Date.parse(b.net) - Date.parse(a.net))[0];
+
     let big, sub, pct;
     if (n === 0) {
-      big = "HMMMM. SLIM. 😬";
-      pct = 12;
-      sub =
-        "Nothing's officially on the range for your exact dates <em>yet</em> — but this is " +
-        "Cape Canaveral, where rockets appear on the schedule like buses. Keep refreshing, " +
-        "keep the faith, and maybe befriend a local with a scanner.";
+      big = "NOTHING FIRM… YET 🤞";
+      pct = 45;
+      if (before) {
+        const { date, time } = fmtDate(before.net);
+        sub =
+          `No launch is officially on the schedule for <b>5–10 July</b> right now. ` +
+          `<b>BUT</b> — <b>${before.name}</b> (${before.rocket}) is currently slated for ` +
+          `<b>${date}, ${time}</b>, just before the lads land… and Cape rockets slip <em>constantly</em>. ` +
+          `One scrub for weather or a boat in the water and it bumps straight into the window. Keep the faith. 🙏`;
+      } else {
+        sub =
+          `No launch is officially on the schedule for <b>5–10 July</b> just yet — but this is ` +
+          `Cape Canaveral, where rockets pop onto the manifest like buses. Keep refreshing, keep hoping.`;
+      }
     } else if (n === 1) {
-      big = "ODDS: DECENT. 🤞";
-      pct = 58;
+      big = "ODDS: NOT BAD 🤞";
+      pct = 60;
       sub =
-        `There's <b>1 launch</b> penciled in while you're in town. One scrub and it's gone, ` +
-        `so cross everything, check the weather, and have a backup plan involving a theme park.`;
+        `There's <b>1 launch</b> currently penciled in while you're in town. One scrub and it's gone, ` +
+        `so cross everything and have a backup plan involving a theme park.`;
     } else {
-      big = "STATISTICALLY INEVITABLE. 🚀🔥";
-      pct = Math.min(96, 70 + n * 6);
+      big = "LOOKING GOOD 🚀🔥";
+      pct = Math.min(94, 66 + n * 6);
       sub =
         `<b>${n} launches</b> are currently targeting your window` +
         (goNow ? ` (${goNow} already flagged GO)` : "") +
-        `. Frankly, if Harry and Jimmy <em>don't</em> see a rocket, that's a skill issue. ` +
-        `Pack sunscreen, point your phone at the sky, and prepare to overreact.`;
+        `. Point your phone at the sky and prepare to overreact.`;
     }
 
     $("verdictBig").textContent = big;
@@ -273,7 +319,7 @@
     $("verdictFoot").textContent =
       n > 0
         ? `${n} launch${n > 1 ? "es" : ""} in window · 5–10 July 2026 · Cape Canaveral & Kennedy Space Center`
-        : "Trip window: 5–10 July 2026 · Cape Canaveral & Kennedy Space Center";
+        : "Nothing scheduled in window · 5–10 July 2026 · Cape Canaveral & Kennedy Space Center";
     requestAnimationFrame(() => { $("verdictFill").style.width = pct + "%"; });
   }
 
@@ -355,6 +401,7 @@
   async function boot() {
     starfield();
     rockets();
+    elon();
     clock();
 
     const { launches, live } = await loadData();
