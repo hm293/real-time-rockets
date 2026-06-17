@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cape Canaveral · Launch Window</title>
+  <meta name="description" content="A live-feel schedule of upcoming and potential rocket launches from the Cape Canaveral spaceport." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>" />
+</head>
+<body>
+  <canvas id="starfield" aria-hidden="true"></canvas>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <a class="brand" href="#top">
+      <span class="brand-mark">▲</span>
+      <span class="brand-text">LAUNCH<span class="accent">WINDOW</span></span>
+    </a>
+    <div class="nav-meta">
+      <span class="dot" id="feedDot"></span>
+      <span id="feedLabel">connecting…</span>
+      <span class="sep">/</span>
+      <span id="clock" class="mono">--:--:-- UTC</span>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero" id="top">
+    <div class="hero-grid"></div>
+    <p class="kicker">CAPE CANAVERAL · 28.5° N · THE SPACE COAST</p>
+    <h1>Eyes on the<br /><span class="glow">range.</span></h1>
+    <p class="lede">
+      Every fairing, every booster, every window. A live look at the rockets
+      stacking on Florida's pads — confirmed launches and the maybes still
+      chasing a date.
+    </p>
+
+    <!-- NEXT LAUNCH COUNTDOWN -->
+    <section class="next" id="next" aria-live="polite">
+      <div class="next-tag">▌ NEXT OFF THE PAD</div>
+      <div class="next-body">
+        <div class="next-info">
+          <h2 id="nextName">Standing by…</h2>
+          <p id="nextDetail" class="next-detail">Acquiring range schedule</p>
+          <div class="next-chips" id="nextChips"></div>
+        </div>
+        <div class="countdown" id="countdown">
+          <div class="cd-cell"><span id="cdD">--</span><label>days</label></div>
+          <div class="cd-cell"><span id="cdH">--</span><label>hrs</label></div>
+          <div class="cd-cell"><span id="cdM">--</span><label>min</label></div>
+          <div class="cd-cell"><span id="cdS">--</span><label>sec</label></div>
+        </div>
+      </div>
+    </section>
+  </header>
+
+  <!-- STATS -->
+  <section class="stats" id="stats">
+    <div class="stat"><span class="stat-num" id="statTotal">–</span><span class="stat-lbl">on the manifest</span></div>
+    <div class="stat"><span class="stat-num" id="statGo">–</span><span class="stat-lbl">confirmed go</span></div>
+    <div class="stat"><span class="stat-num" id="statTbd">–</span><span class="stat-lbl">potential / TBD</span></div>
+    <div class="stat"><span class="stat-num" id="statProviders">–</span><span class="stat-lbl">launch providers</span></div>
+  </section>
+
+  <!-- SCHEDULE -->
+  <main class="schedule">
+    <div class="sched-head">
+      <h3>The Manifest</h3>
+      <div class="filters" id="filters" role="tablist"></div>
+    </div>
+    <div class="timeline" id="timeline">
+      <div class="loading">Plotting trajectories…</div>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <p>
+      Built for fun on the Space Coast. Live data via
+      <a href="https://thespacedevs.com/" target="_blank" rel="noopener">The Space Devs</a>
+      Launch Library 2 — falls back to a curated manifest when offline.
+    </p>
+    <p class="foot-note">Schedules slip. Always confirm with the provider before driving to the beach. 🌊</p>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
