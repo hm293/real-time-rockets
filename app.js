@@ -9,6 +9,15 @@
 
   const $ = (id) => document.getElementById(id);
 
+  /* ---------- 0. THE TRIP ---------- */
+  // Harry & Jimmy are loitering on the Space Coast for these dates (UTC-ish).
+  const TRIP_START = Date.parse("2026-07-05T00:00:00Z");
+  const TRIP_END = Date.parse("2026-07-10T23:59:59Z");
+  const inTrip = (l) => {
+    const t = Date.parse(l.net);
+    return !isNaN(t) && t >= TRIP_START && t <= TRIP_END;
+  };
+
   /* ---------- 1. STARFIELD ---------- */
   function starfield() {
     const c = $("starfield");
@@ -46,6 +55,52 @@
     resize();
     window.addEventListener("resize", resize);
     if (!matchMedia("(prefers-reduced-motion: reduce)").matches) requestAnimationFrame(tick);
+  }
+
+  /* ---------- 1b. FLYING ROCKETS ---------- */
+  function rockets() {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const layer = $("rocketLayer");
+    const EMOJI = ["🚀", "🛰️", "🚀", "🛸", "🚀"];
+
+    function launchOne() {
+      const el = document.createElement("div");
+      el.className = "flyrocket";
+      el.textContent = EMOJI[(Math.random() * EMOJI.length) | 0];
+      layer.appendChild(el);
+
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      // fly from lower-left-ish up to upper-right-ish, with a random tilt
+      const startX = -80;
+      const startY = vh * (0.4 + Math.random() * 0.55);
+      const endX = vw + 80;
+      const endY = vh * (0.05 + Math.random() * 0.35);
+      const angle = (Math.atan2(endY - startY, endX - startX) * 180) / Math.PI;
+      const dur = 7000 + Math.random() * 9000;
+      const size = 22 + Math.random() * 26;
+      el.style.fontSize = size + "px";
+
+      const anim = el.animate(
+        [
+          { transform: `translate(${startX}px, ${startY}px) rotate(${angle + 45}deg)`, opacity: 0 },
+          { offset: 0.08, opacity: 1 },
+          { offset: 0.92, opacity: 1 },
+          { transform: `translate(${endX}px, ${endY}px) rotate(${angle + 45}deg)`, opacity: 0 },
+        ],
+        { duration: dur, easing: "linear" }
+      );
+      anim.onfinish = () => { el.remove(); scheduleNext(); };
+    }
+
+    function scheduleNext() {
+      setTimeout(launchOne, 1500 + Math.random() * 4000);
+    }
+
+    // a couple in flight at once
+    launchOne();
+    setTimeout(launchOne, 2500);
+    setTimeout(launchOne, 5000);
   }
 
   /* ---------- 2. CLOCK ---------- */
@@ -176,11 +231,50 @@
   /* ---------- 6. STATS ---------- */
   function renderStats(launches) {
     $("statTotal").textContent = launches.length;
+    $("statTrip").textContent = launches.filter(inTrip).length;
     $("statGo").textContent = launches.filter((l) => l.status === "GO").length;
-    $("statTbd").textContent = launches.filter((l) => l.status !== "GO").length;
     $("statProviders").textContent = new Set(
       launches.map((l) => l.provider.split("/")[0].trim())
     ).size;
+  }
+
+  /* ---------- THE VERDICT ---------- */
+  function renderVerdict(launches) {
+    const tripLaunches = launches.filter(inTrip);
+    const n = tripLaunches.length;
+    const goNow = tripLaunches.filter((l) => l.status === "GO").length;
+
+    let big, sub, pct;
+    if (n === 0) {
+      big = "HMMMM. SLIM. 😬";
+      pct = 12;
+      sub =
+        "Nothing's officially on the range for your exact dates <em>yet</em> — but this is " +
+        "Cape Canaveral, where rockets appear on the schedule like buses. Keep refreshing, " +
+        "keep the faith, and maybe befriend a local with a scanner.";
+    } else if (n === 1) {
+      big = "ODDS: DECENT. 🤞";
+      pct = 58;
+      sub =
+        `There's <b>1 launch</b> penciled in while you're in town. One scrub and it's gone, ` +
+        `so cross everything, check the weather, and have a backup plan involving a theme park.`;
+    } else {
+      big = "STATISTICALLY INEVITABLE. 🚀🔥";
+      pct = Math.min(96, 70 + n * 6);
+      sub =
+        `<b>${n} launches</b> are currently targeting your window` +
+        (goNow ? ` (${goNow} already flagged GO)` : "") +
+        `. Frankly, if Harry and Jimmy <em>don't</em> see a rocket, that's a skill issue. ` +
+        `Pack sunscreen, point your phone at the sky, and prepare to overreact.`;
+    }
+
+    $("verdictBig").textContent = big;
+    $("verdictSub").innerHTML = sub;
+    $("verdictFoot").textContent =
+      n > 0
+        ? `${n} launch${n > 1 ? "es" : ""} in window · 5–10 July 2026 · Cape Canaveral & Kennedy Space Center`
+        : "Trip window: 5–10 July 2026 · Cape Canaveral & Kennedy Space Center";
+    requestAnimationFrame(() => { $("verdictFill").style.width = pct + "%"; });
   }
 
   /* ---------- 7. CARDS ---------- */
@@ -188,8 +282,13 @@
     const { date, time } = fmtDate(l.net);
     const node = NODE_COLOR[l.status] || "#5cf2d6";
     const payload = l.payloadKg ? `${l.payloadKg.toLocaleString()} kg` : "—";
+    const trip = inTrip(l);
+    const tripFlag = trip
+      ? `<div><span class="trip-flag">🎯 YOU MIGHT ACTUALLY SEE THIS ONE</span></div>`
+      : "";
     return `
-      <article class="launch" style="--node:${node}; animation-delay:${i * 60}ms" data-i="${i}">
+      <article class="launch ${trip ? "in-trip" : ""}" style="--node:${node}; animation-delay:${i * 60}ms" data-i="${i}">
+        ${tripFlag}
         <div class="launch-top">
           <div>
             <div class="launch-name">${l.name}</div>
@@ -255,6 +354,7 @@
   /* ---------- 8. BOOT ---------- */
   async function boot() {
     starfield();
+    rockets();
     clock();
 
     const { launches, live } = await loadData();
@@ -270,6 +370,7 @@
     $("feedLabel").textContent = live ? "live feed · LL2" : "curated manifest";
 
     renderNext(launches[0]);
+    renderVerdict(launches);
     renderStats(launches);
     renderFilters();
     renderTimeline();

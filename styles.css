@@ -39,6 +39,78 @@ body {
   pointer-events: none;
 }
 
+/* ---------- EARTH FROM ORBIT ---------- */
+.earth {
+  position: fixed;
+  left: 50%;
+  bottom: -62vw;
+  width: 130vw;
+  height: 130vw;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 35% at 30% 22%, rgba(120, 200, 255, 0.55), transparent 60%),
+    radial-gradient(55% 45% at 72% 32%, rgba(60, 130, 230, 0.55), transparent 60%),
+    radial-gradient(circle at 50% 38%, #2b6fd6 0%, #1b4ea3 35%, #0a2a63 62%, #061a40 100%);
+  box-shadow:
+    0 -30px 120px -20px rgba(70, 150, 255, 0.55),
+    inset 0 40px 120px -30px rgba(180, 230, 255, 0.65);
+}
+/* atmospheric rim light */
+.earth-atmo {
+  position: absolute;
+  inset: -3vw;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow:
+    inset 0 26px 70px -10px rgba(150, 220, 255, 0.85),
+    0 0 90px 10px rgba(80, 170, 255, 0.45);
+}
+/* drifting "continents / clouds" */
+.earth-clouds {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0.5;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(18% 9% at 28% 30%, rgba(190, 235, 200, 0.8), transparent 70%),
+    radial-gradient(14% 7% at 52% 24%, rgba(220, 245, 255, 0.7), transparent 70%),
+    radial-gradient(22% 10% at 68% 40%, rgba(160, 210, 180, 0.7), transparent 70%),
+    radial-gradient(12% 6% at 40% 46%, rgba(230, 250, 255, 0.7), transparent 70%),
+    radial-gradient(16% 8% at 80% 26%, rgba(200, 240, 255, 0.6), transparent 70%);
+  animation: spin 140s linear infinite;
+}
+
+/* ---------- FLYING ROCKETS ---------- */
+#rocketLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.flyrocket {
+  position: absolute;
+  font-size: 30px;
+  will-change: transform;
+  filter: drop-shadow(-8px 6px 10px rgba(255, 140, 70, 0.8));
+}
+.flyrocket::after {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  width: 60px;
+  height: 4px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, rgba(255, 170, 90, 0.9));
+  border-radius: 4px;
+  filter: blur(1px);
+}
+
 .mono { font-variant-numeric: tabular-nums; }
 
 /* ---------- NAV ---------- */
@@ -312,6 +384,85 @@ body {
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ---------- VERDICT CARD ---------- */
+.verdict {
+  margin-top: 40px;
+  border: 1px solid rgba(255, 209, 102, 0.35);
+  border-radius: var(--r);
+  background:
+    radial-gradient(600px 240px at 15% 0%, rgba(255, 209, 102, 0.12), transparent 60%),
+    var(--panel);
+  backdrop-filter: blur(16px);
+  overflow: hidden;
+}
+.verdict-tag {
+  font-family: "Orbitron", sans-serif; font-size: 12px; letter-spacing: 4px;
+  color: var(--gold); padding: 14px 22px;
+  border-bottom: 1px solid var(--panel-brd);
+}
+.verdict-body { padding: 26px 22px; }
+.verdict-big {
+  font-family: "Orbitron", sans-serif; font-weight: 900;
+  font-size: clamp(28px, 6vw, 60px); line-height: 1.02; letter-spacing: -0.5px;
+  background: linear-gradient(120deg, var(--gold), var(--hot) 70%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 50px rgba(255, 180, 90, 0.25);
+}
+.verdict-sub {
+  margin-top: 12px; font-size: clamp(15px, 2.4vw, 19px);
+  color: var(--ink); font-weight: 300; max-width: 640px;
+}
+.verdict-meter {
+  margin-top: 18px; height: 12px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--panel-brd); overflow: hidden;
+}
+.verdict-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--go), var(--gold), var(--hot));
+  box-shadow: 0 0 18px rgba(255, 170, 90, 0.6);
+  transition: width 1.6s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+.verdict-foot {
+  margin-top: 12px; font-size: 12px; letter-spacing: 1px;
+  color: var(--ink-dim); text-transform: uppercase;
+}
+
+/* trip-window stat + badges */
+.stat.trip {
+  border-color: rgba(255, 209, 102, 0.5);
+  background:
+    radial-gradient(120px 80px at 50% 0%, rgba(255, 209, 102, 0.16), transparent 70%),
+    var(--panel);
+}
+.stat.trip .stat-num {
+  background: linear-gradient(120deg, var(--gold), var(--hot));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.sched-sub {
+  font-family: "Space Grotesk", sans-serif; font-weight: 300;
+  font-size: 15px; color: var(--ink-dim); letter-spacing: 0;
+}
+
+/* a launch that falls inside the trip window */
+.launch.in-trip {
+  border-color: rgba(255, 209, 102, 0.55);
+  box-shadow: -10px 0 36px -16px var(--gold);
+}
+.launch.in-trip::before { background: var(--bg); border-color: var(--gold); box-shadow: 0 0 14px var(--gold); }
+.trip-flag {
+  display: inline-block; margin-top: 12px;
+  font-family: "Orbitron", sans-serif; font-size: 11px; letter-spacing: 2px;
+  color: var(--bg); background: linear-gradient(120deg, var(--gold), var(--hot));
+  padding: 5px 12px; border-radius: 999px; font-weight: 700;
+  animation: wob 1.6s ease-in-out infinite;
+}
+@keyframes wob {
+  0%, 100% { transform: rotate(-1.5deg) scale(1); }
+  50% { transform: rotate(1.5deg) scale(1.04); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 720px) {
   .stats { grid-template-columns: repeat(2, 1fr); }

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cape Canaveral · Launch Window</title>
-  <meta name="description" content="A live-feel schedule of upcoming and potential rocket launches from the Cape Canaveral spaceport." />
+  <title>Harry &amp; Jimmy vs. The Rockets 🚀</title>
+  <meta name="description" content="A highly scientific investigation into whether Harry and Jimmy will catch a rocket launch in Florida, July 5–10." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
@@ -13,12 +13,17 @@
 </head>
 <body>
   <canvas id="starfield" aria-hidden="true"></canvas>
+  <div class="earth" aria-hidden="true">
+    <div class="earth-atmo"></div>
+    <div class="earth-clouds"></div>
+  </div>
+  <div id="rocketLayer" aria-hidden="true"></div>
 
   <!-- NAV -->
   <nav class="nav">
     <a class="brand" href="#top">
-      <span class="brand-mark">▲</span>
-      <span class="brand-text">LAUNCH<span class="accent">WINDOW</span></span>
+      <span class="brand-mark">🚀</span>
+      <span class="brand-text">MISSION: <span class="accent">ROCKET HUNT</span></span>
     </a>
     <div class="nav-meta">
       <span class="dot" id="feedDot"></span>
@@ -31,13 +36,27 @@
   <!-- HERO -->
   <header class="hero" id="top">
     <div class="hero-grid"></div>
-    <p class="kicker">CAPE CANAVERAL · 28.5° N · THE SPACE COAST</p>
-    <h1>Eyes on the<br /><span class="glow">range.</span></h1>
+    <p class="kicker">🌴 A HIGHLY SCIENTIFIC INVESTIGATION · FLORIDA · JUL 5–10, 2026</p>
+    <h1>Will Harry &amp; Jimmy<br />catch a <span class="glow">rocket?</span></h1>
     <p class="lede">
-      Every fairing, every booster, every window. A live look at the rockets
-      stacking on Florida's pads — confirmed launches and the maybes still
-      chasing a date.
+      Two lads. One rental car. A truly heroic quantity of optimism. Somewhere
+      out on the Cape, multi-billion-dollar machines are stacking on the pads —
+      and the only real question is whether they'll go <em>up</em> while Harry and
+      Jimmy are squinting at the sky from a beach with a gas-station slushie.
     </p>
+
+    <!-- THE VERDICT -->
+    <section class="verdict" id="verdict" aria-live="polite">
+      <div class="verdict-tag">▌ THE OFFICIAL VERDICT</div>
+      <div class="verdict-body">
+        <div class="verdict-big" id="verdictBig">CALCULATING…</div>
+        <p class="verdict-sub" id="verdictSub">
+          Consulting the range, the weather gods, and the SpaceX scrub generator…
+        </p>
+        <div class="verdict-meter"><div class="verdict-fill" id="verdictFill"></div></div>
+        <p class="verdict-foot" id="verdictFoot">Trip window: 5–10 July 2026 · Cape Canaveral &amp; Kennedy Space Center</p>
+      </div>
+    </section>
 
     <!-- NEXT LAUNCH COUNTDOWN -->
     <section class="next" id="next" aria-live="polite">
@@ -60,16 +79,16 @@
 
   <!-- STATS -->
   <section class="stats" id="stats">
+    <div class="stat trip"><span class="stat-num" id="statTrip">–</span><span class="stat-lbl">🎯 during the trip</span></div>
     <div class="stat"><span class="stat-num" id="statTotal">–</span><span class="stat-lbl">on the manifest</span></div>
     <div class="stat"><span class="stat-num" id="statGo">–</span><span class="stat-lbl">confirmed go</span></div>
-    <div class="stat"><span class="stat-num" id="statTbd">–</span><span class="stat-lbl">potential / TBD</span></div>
-    <div class="stat"><span class="stat-num" id="statProviders">–</span><span class="stat-lbl">launch providers</span></div>
+    <div class="stat"><span class="stat-num" id="statProviders">–</span><span class="stat-lbl">rocket companies</span></div>
   </section>
 
   <!-- SCHEDULE -->
   <main class="schedule">
     <div class="sched-head">
-      <h3>The Manifest</h3>
+      <h3>The Manifest <span class="sched-sub">— rockets stacking up while the lads are in town(ish)</span></h3>
       <div class="filters" id="filters" role="tablist"></div>
     </div>
     <div class="timeline" id="timeline">
@@ -79,11 +98,14 @@
 
   <footer class="foot">
     <p>
-      Built for fun on the Space Coast. Live data via
+      Lovingly over-engineered for two men and their rocket dreams. Live data via
       <a href="https://thespacedevs.com/" target="_blank" rel="noopener">The Space Devs</a>
-      Launch Library 2 — falls back to a curated manifest when offline.
+      Launch Library 2 — falls back to a curated manifest when the internet scrubs.
     </p>
-    <p class="foot-note">Schedules slip. Always confirm with the provider before driving to the beach. 🌊</p>
+    <p class="foot-note">
+      Rockets scrub. Constantly. For weather, boats, bad vibes, and reasons known only to Elon.
+      If you see one go up: scream, point, and pretend you planned it. 🌊🚀
+    </p>
   </footer>
 
   <script src="data.js"></script>
