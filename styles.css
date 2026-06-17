@@ -66,32 +66,6 @@ body {
   filter: blur(1px);
 }
 
-/* floating Elon (very serious, very scientific) */
-.flyelon {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  will-change: transform;
-}
-.flyelon .head {
-  width: 54px; height: 54px; border-radius: 50%;
-  display: grid; place-items: center; font-size: 30px;
-  background: radial-gradient(circle at 35% 30%, #ffe7c7, #e9b486 70%, #c98f5f);
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 0 22px rgba(120, 180, 255, 0.6);
-  animation: bob 2.2s ease-in-out infinite;
-}
-.flyelon .tag {
-  font-family: "Orbitron", sans-serif; font-size: 10px; letter-spacing: 2px;
-  color: var(--ink); background: rgba(10, 14, 31, 0.7);
-  border: 1px solid var(--panel-brd); border-radius: 999px; padding: 2px 8px;
-}
-@keyframes bob {
-  0%, 100% { transform: translateY(-3px); }
-  50% { transform: translateY(3px); }
-}
 
 .mono { font-variant-numeric: tabular-nums; }
 
@@ -161,9 +135,19 @@ body {
   color: var(--ink-dim); font-weight: 400; letter-spacing: 0.3px;
 }
 
+/* hero two-column layout: portrait | verdict */
+.hero-cols {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 28px;
+  align-items: center;
+}
+.hero-cols .verdict { margin-top: 0; }
+
 /* crew portrait */
 .crew {
-  margin: 26px 0 6px;
+  margin: 0;
   max-width: 440px;
   position: relative;
   animation: float 6s ease-in-out infinite;
@@ -322,6 +306,25 @@ body {
 }
 .launch-sub .prov { color: var(--accent); font-weight: 600; }
 
+/* company badge on each launch */
+.co-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 12px 5px 8px; border-radius: 999px;
+  font-weight: 700; font-size: 13px; letter-spacing: 0.3px;
+  color: #fff; border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--co, #444); white-space: nowrap;
+}
+.co-badge .co-glyph {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 12px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.launch-head {
+  display: flex; flex-wrap: wrap; gap: 10px 12px;
+  align-items: center; margin-bottom: 10px;
+}
+.launch-head .launch-when { margin-left: auto; }
+
 .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
 .chip {
   font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
@@ -458,6 +461,11 @@ body {
 @keyframes wob {
   0%, 100% { transform: rotate(-1.5deg) scale(1); }
   50% { transform: rotate(1.5deg) scale(1.04); }
+}
+
+@media (max-width: 860px) {
+  .hero-cols { grid-template-columns: 1fr; gap: 22px; }
+  .crew { max-width: 360px; margin: 0 auto; }
 }
 
 @media (max-width: 720px) {

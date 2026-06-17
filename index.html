@@ -35,26 +35,28 @@
     <h1 class="title">Real Time <span class="accent">Rockets</span> 🚀</h1>
     <p class="subtitle">Current likelihood of Harry &amp; Jimmy catching a rocket</p>
 
-    <!-- CREW PORTRAIT (hidden until harry-jimmy.png is added to the repo) -->
-    <figure class="crew" id="crewFig">
-      <img id="crewImg" src="harry-jimmy.png"
-           alt="Harry and Jimmy as the pilots of two rockets blasting off from Earth"
-           onerror="this.closest('figure').remove()" />
-      <figcaption>Cmdr. Harry &amp; Lt. Jimmy · pre-mission portrait (artist's impression) 🫡</figcaption>
-    </figure>
+    <div class="hero-cols">
+      <!-- CREW PORTRAIT (hidden until harry-jimmy.png is added to the repo) -->
+      <figure class="crew" id="crewFig">
+        <img id="crewImg" src="harry-jimmy.png"
+             alt="Harry and Jimmy as the pilots of two rockets blasting off from Earth"
+             onerror="this.closest('figure').remove()" />
+        <figcaption>Cmdr. Harry &amp; Lt. Jimmy · pre-mission portrait (artist's impression) 🫡</figcaption>
+      </figure>
 
-    <!-- THE VERDICT -->
-    <section class="verdict" id="verdict" aria-live="polite">
-      <div class="verdict-tag">▌ THE OFFICIAL VERDICT</div>
-      <div class="verdict-body">
-        <div class="verdict-big" id="verdictBig">CALCULATING…</div>
-        <p class="verdict-sub" id="verdictSub">
-          Consulting the range, the weather gods, and the SpaceX scrub generator…
-        </p>
-        <div class="verdict-meter"><div class="verdict-fill" id="verdictFill"></div></div>
-        <p class="verdict-foot" id="verdictFoot">Trip window: 5–10 July 2026 · Cape Canaveral &amp; Kennedy Space Center</p>
-      </div>
-    </section>
+      <!-- THE VERDICT -->
+      <section class="verdict" id="verdict" aria-live="polite">
+        <div class="verdict-tag">▌ THE OFFICIAL VERDICT</div>
+        <div class="verdict-body">
+          <div class="verdict-big" id="verdictBig">CALCULATING…</div>
+          <p class="verdict-sub" id="verdictSub">
+            Consulting the range, the weather gods, and the SpaceX scrub generator…
+          </p>
+          <div class="verdict-meter"><div class="verdict-fill" id="verdictFill"></div></div>
+          <p class="verdict-foot" id="verdictFoot">Trip window: 5–10 July 2026 · Cape Canaveral &amp; Kennedy Space Center</p>
+        </div>
+      </section>
+    </div>
 
     <!-- NEXT LAUNCH COUNTDOWN -->
     <section class="next" id="next" aria-live="polite">

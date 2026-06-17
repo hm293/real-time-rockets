@@ -103,40 +103,6 @@
     setTimeout(launchOne, 5000);
   }
 
-  /* ---------- 1c. A FLOATING ELON ---------- */
-  function elon() {
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const layer = $("rocketLayer");
-
-    function floatBy() {
-      const el = document.createElement("div");
-      el.className = "flyelon";
-      el.innerHTML = `<div class="head">🧑‍🚀</div><div class="tag">ELON?</div>`;
-      layer.appendChild(el);
-
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      const leftToRight = Math.random() > 0.5;
-      const y = vh * (0.12 + Math.random() * 0.4);
-      const from = leftToRight ? -90 : vw + 90;
-      const to = leftToRight ? vw + 90 : -90;
-      const dur = 16000 + Math.random() * 10000;
-
-      const anim = el.animate(
-        [
-          { transform: `translate(${from}px, ${y}px)`, opacity: 0 },
-          { offset: 0.1, opacity: 1 },
-          { offset: 0.9, opacity: 1 },
-          { transform: `translate(${to}px, ${y - 40}px)`, opacity: 0 },
-        ],
-        { duration: dur, easing: "ease-in-out" }
-      );
-      anim.onfinish = () => { el.remove(); setTimeout(floatBy, 12000 + Math.random() * 18000); };
-    }
-
-    setTimeout(floatBy, 4000);
-  }
-
   /* ---------- 2. CLOCK ---------- */
   function clock() {
     const el = $("clock");
@@ -204,6 +170,25 @@
 
   /* ---------- 4. FORMAT HELPERS ---------- */
   const NODE_COLOR = { GO: "#4ade80", TBD: "#ffd166", NET: "#7b8cff", HOLD: "#ff6b4a" };
+
+  // brand colour + glyph for the company flying each mission
+  const BRANDS = [
+    { match: /spacex/i,            name: "SpaceX",  color: "#1b2a4a", glyph: "🚀" },
+    { match: /amazon|kuiper/i,     name: "Amazon",  color: "#e47911", glyph: "📦" },
+    { match: /nasa/i,              name: "NASA",    color: "#0b3d91", glyph: "🚀" },
+    { match: /noaa/i,              name: "NOAA",    color: "#0e7c7b", glyph: "🛰️" },
+    { match: /\bula\b|united launch|atlas|vulcan|delta/i, name: "ULA", color: "#13294b", glyph: "🛰️" },
+    { match: /blue origin/i,       name: "Blue Origin", color: "#1f6feb", glyph: "🪶" },
+    { match: /firefly/i,           name: "Firefly", color: "#6d28d9", glyph: "✨" },
+    { match: /rocket lab/i,        name: "Rocket Lab", color: "#111827", glyph: "🛰️" },
+    { match: /space force|ussf|national/i, name: "U.S. Space Force", color: "#2a3550", glyph: "🛡️" },
+  ];
+  function brandOf(provider) {
+    const b = BRANDS.find((x) => x.match.test(provider));
+    if (b) return b;
+    const name = provider.split("/")[0].trim() || "Launch";
+    return { name, color: "#3a4660", glyph: "🚀" };
+  }
 
   function fmtDate(iso) {
     const d = new Date(iso);
@@ -329,22 +314,27 @@
     const node = NODE_COLOR[l.status] || "#5cf2d6";
     const payload = l.payloadKg ? `${l.payloadKg.toLocaleString()} kg` : "—";
     const trip = inTrip(l);
+    const b = brandOf(l.provider);
     const tripFlag = trip
       ? `<div><span class="trip-flag">🎯 YOU MIGHT ACTUALLY SEE THIS ONE</span></div>`
       : "";
     return `
       <article class="launch ${trip ? "in-trip" : ""}" style="--node:${node}; animation-delay:${i * 60}ms" data-i="${i}">
         ${tripFlag}
+        <div class="launch-head">
+          <span class="co-badge" style="--co:${b.color}">
+            <span class="co-glyph">${b.glyph}</span>${b.name}
+          </span>
+          <div class="launch-when"><b>${date}</b> · ${time}</div>
+        </div>
         <div class="launch-top">
           <div>
             <div class="launch-name">${l.name}</div>
             <div class="launch-sub">
-              <span class="prov">${l.provider}</span>
               <span>${l.rocket}</span>
               <span>· ${l.pad}, ${l.site}</span>
             </div>
           </div>
-          <div class="launch-when"><b>${date}</b> · ${time}</div>
         </div>
         <div class="chips">
           ${chip(l.status, "status " + l.status)}
@@ -401,7 +391,6 @@
   async function boot() {
     starfield();
     rockets();
-    elon();
     clock();
 
     const { launches, live } = await loadData();
