@@ -161,6 +161,26 @@ body {
   color: var(--ink-dim); font-weight: 400; letter-spacing: 0.3px;
 }
 
+/* crew portrait */
+.crew {
+  margin: 26px 0 6px;
+  max-width: 440px;
+  position: relative;
+  animation: float 6s ease-in-out infinite;
+}
+.crew img {
+  width: 100%; display: block; border-radius: 18px;
+  border: 1px solid rgba(123, 140, 255, 0.4);
+  box-shadow:
+    0 0 60px -12px rgba(123, 140, 255, 0.6),
+    0 20px 50px -20px rgba(0, 0, 0, 0.8),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.crew figcaption {
+  margin-top: 10px; font-size: 11px; letter-spacing: 2px;
+  color: var(--ink-dim); text-transform: uppercase;
+}
+
 /* ---------- NEXT / COUNTDOWN ---------- */
 .next {
   margin-top: 46px;
