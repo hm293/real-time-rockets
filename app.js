@@ -131,15 +131,16 @@
   function normalizeLive(results) {
     return results.map((r) => {
       const rocket = r.rocket?.configuration?.name || r.name?.split("|")[0]?.trim() || "Rocket";
-      const provider = r.launch_service_provider?.name || "—";
-      const padName = r.pad?.name || "";
-      const site = r.pad?.location?.name || "Cape Canaveral";
+      // list mode returns lsp_name / pad / location as flat strings; detail mode nests them.
+      const provider = r.launch_service_provider?.name || r.lsp_name || "—";
+      const padName = (typeof r.pad === "string" ? r.pad : r.pad?.name) || "";
+      const site = (typeof r.location === "string" ? r.location : r.pad?.location?.name) || "Cape Canaveral";
       const statusAbbr = r.status?.abbrev || r.status?.name || "TBD";
       return {
         name: (r.mission?.name || r.name?.split("|").pop() || r.name || "Mission").trim(),
         provider,
         rocket,
-        pad: padName.replace(/^.*?(SLC|LC)/, "$1") || padName,
+        pad: padName.replace(/^Space Launch Complex\s*/i, "SLC-").replace(/^Launch Complex\s*/i, "LC-") || padName,
         site: site.includes("Cape") ? "Cape Canaveral SFS" : "Kennedy Space Center",
         net: r.net,
         window: r.window_start && r.window_end && r.window_start !== r.window_end
@@ -257,55 +258,255 @@
     ).size;
   }
 
+  /* ---------- WEATHER + LIKELIHOOD MODEL ---------- */
+  // Known Space Coast pads → coordinates (weather is ~uniform at this scale;
+  // the general Cape fallback is fine for anything unmatched).
+  const PAD_COORDS = [
+    { match: /slc-?40|space launch complex 40/i, lat: 28.562, lon: -80.577 },
+    { match: /slc-?41|space launch complex 41/i, lat: 28.583, lon: -80.583 },
+    { match: /slc-?37|space launch complex 37/i, lat: 28.531, lon: -80.565 },
+    { match: /39a|launch complex 39a/i,          lat: 28.608, lon: -80.604 },
+    { match: /39b|launch complex 39b/i,          lat: 28.627, lon: -80.621 },
+  ];
+  function padCoords(l) {
+    const hay = `${l.pad} ${l.site}`;
+    const hit = PAD_COORDS.find((p) => p.match.test(hay));
+    return hit || { lat: 28.49, lon: -80.57 }; // Cape Canaveral, general
+  }
+
+  const clamp = (v, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, v));
+
+  // Local (Eastern) date + hour for a launch's NET, so we index the right forecast hour.
+  function etParts(iso) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York", year: "numeric", month: "2-digit",
+        day: "2-digit", hour: "2-digit", hour12: false,
+      }).formatToParts(new Date(iso)).reduce((o, p) => (o[p.type] = p.value, o), {});
+      const hour = parts.hour === "24" ? 0 : Number(parts.hour);
+      return { date: `${parts.year}-${parts.month}-${parts.day}`, hour };
+    } catch { return null; }
+  }
+
+  // Pull the launch-hour forecast from Open-Meteo (keyless, CORS-friendly).
+  // Returns { gust, precip, cape, cloud } in kn / % / J/kg / %, or null.
+  async function fetchWeather(l) {
+    const et = etParts(l.net);
+    if (!et) return null;
+    const { lat, lon } = padCoords(l);
+    const url =
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&hourly=wind_gusts_10m,precipitation_probability,cloud_cover,cape` +
+      `&wind_speed_unit=kn&timezone=America%2FNew_York` +
+      `&start_date=${et.date}&end_date=${et.date}`;
+    try {
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 7000);
+      const res = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(to);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const j = await res.json();
+      const times = j.hourly?.time || [];
+      let i = times.findIndex((t) => Number(t.slice(11, 13)) === et.hour);
+      if (i < 0) i = 0;
+      const at = (arr) => (arr && arr[i] != null ? arr[i] : null);
+      const gust = at(j.hourly.wind_gusts_10m);
+      if (gust == null) return null;
+      return {
+        gust,
+        precip: at(j.hourly.precipitation_probability) ?? 0,
+        cape: at(j.hourly.cape) ?? 0,
+        cloud: at(j.hourly.cloud_cover) ?? 0,
+        etHour: et.hour,
+      };
+    } catch { return null; }
+  }
+
+  // Confidence the range/provider will even attempt on time.
+  const SCHED_CONF = { GO: 0.9, NET: 0.6, TBD: 0.35, HOLD: 0.2 };
+
+  // Combine schedule confidence × weather-go × window into a single %.
+  // Every input is transparent so the commentary can explain the number.
+  function likelihood(l, wx) {
+    const sched = SCHED_CONF[l.status] ?? 0.4;
+    const windowF = l.window === "Open window" ? 1.05 : 0.96;
+
+    if (!wx) {
+      const pct = Math.round(clamp(sched * windowF, 0.03, 0.97) * 100);
+      return { pct, sched, weatherGo: null, wx: null, worst: null };
+    }
+    // Each factor → a 0..1 "probability of violation", ramped over its danger band.
+    const F = [
+      { key: "storms", p: clamp((wx.cape - 500) / 2000),
+        hi: "storm energy is building (the classic Florida afternoon-storm risk)",
+        ok: "there's barely any storm energy" },
+      { key: "rain", p: clamp((wx.precip - 15) / 55),
+        hi: "there's a real chance of rain through the window",
+        ok: "almost no rain in the forecast" },
+      { key: "wind", p: clamp((wx.gust - 25) / 15),
+        hi: "surface winds are gusting near the limit",
+        ok: "surface winds are light" },
+      { key: "cloud", p: clamp((wx.cloud - 60) / 40),
+        hi: "thick cloud cover could trip the cloud rules",
+        ok: "skies are mostly clear" },
+    ];
+    const W = { storms: 0.35, rain: 0.3, wind: 0.25, cloud: 0.1 };
+    const violation = F.reduce((s, f) => s + W[f.key] * f.p, 0);
+    const weatherGo = clamp(1 - violation, 0.05, 0.98);
+    // rank the watch-item by weighted contribution, not raw value — a 100% cloud
+    // (low weight) shouldn't outrank moderate storm energy (high weight).
+    const worst = F.slice().sort((a, b) => W[b.key] * b.p - W[a.key] * a.p)[0];
+    const pct = Math.round(clamp(sched * weatherGo * windowF, 0.03, 0.97) * 100);
+    return { pct, sched, weatherGo, wx, worst };
+  }
+
+  // Colour band for the headline number.
+  function pctTheme(pct) {
+    if (pct >= 80) return { color: "var(--go)", glow: "rgba(74,222,128,0.45)", big: "STRAP IN — THIS LOOKS LIVE 🚀🔥" };
+    if (pct >= 60) return { color: "var(--gold)", glow: "rgba(255,209,102,0.45)", big: "DECENT ODDS, LADS 🤞" };
+    if (pct >= 40) return { color: "var(--gold)", glow: "rgba(255,209,102,0.4)", big: "GENUINELY A COIN FLIP 🪙" };
+    return { color: "var(--hot)", glow: "rgba(255,107,74,0.45)", big: "LONG SHOT… BUT NOT ZERO 🌠" };
+  }
+
+  // Plain-English "why" for the number.
+  function commentary(l, L, otherCount) {
+    const b = brandOf(l.provider).name;
+    const { date, time } = fmtDate(l.net);
+    const statusClause =
+      l.status === "GO" ? `<b>${b}</b> has <b>${l.name}</b> flagged <b>GO</b>`
+      : l.status === "NET" ? `<b>${b}</b>'s <b>${l.name}</b> is on the schedule but still <b>to-be-confirmed</b>`
+      : l.status === "TBD" ? `<b>${l.name}</b>'s date is still a rough placeholder (<b>TBD</b>)`
+      : l.status === "HOLD" ? `<b>${l.name}</b> is currently on <b>hold</b>`
+      : `<b>${l.name}</b> is on the manifest`;
+
+    let weatherClause, readout = "";
+    if (!L.wx) {
+      weatherClause = `though live weather wasn't available, so this is the schedule signal alone.`;
+    } else {
+      const w = L.wx;
+      readout =
+        `<span class="wx-readout">launch-hour forecast · gusts ~${Math.round(w.gust)} kn · ` +
+        `${Math.round(w.precip)}% rain · CAPE ${Math.round(w.cape)} J/kg · ` +
+        `${Math.round(w.cloud)}% cloud</span>`;
+      if (L.weatherGo >= 0.85) {
+        weatherClause = L.worst.p >= 0.5
+          ? `and the forecast is largely a green light — the only real watch-item is that ${L.worst.hi}.`
+          : `and the launch-hour forecast is a green light: light winds, low storm energy and little rain.`;
+      } else if (L.weatherGo >= 0.7) {
+        weatherClause = `and weather is mostly cooperative — main watch-item: ${L.worst.hi}.`;
+      } else {
+        weatherClause = `but weather is a genuine risk here — ${L.worst.hi}.`;
+      }
+    }
+
+    const windowClause =
+      l.window === "Open window"
+        ? `The multi-hour window helps — if something hiccups they get several cracks at it.`
+        : `It's an instantaneous window though, so it's essentially one shot.`;
+
+    const bonus = otherCount > 0
+      ? ` And that's not your only chance — <b>${otherCount}</b> more launch${otherCount > 1 ? "es are" : " is"} also targeting your window.`
+      : "";
+
+    return `${statusClause} for <b>${date}, ${time}</b>, ${weatherClause} ${windowClause}${bonus}${readout ? "<br>" + readout : ""}`;
+  }
+
+  // Remember the last reading per launch so we can flag movement between visits.
+  function changeNote(l, pct) {
+    const key = "lw:verdict:" + (l.name + "|" + l.pad).replace(/\s+/g, "_");
+    let prev = null;
+    try { prev = JSON.parse(localStorage.getItem(key) || "null"); } catch {}
+    try { localStorage.setItem(key, JSON.stringify({ pct, status: l.status, net: l.net })); } catch {}
+    if (!prev) return null;
+
+    if (prev.status !== l.status) {
+      return { cls: l.status === "GO" ? "up" : "info", text: `Status moved ${prev.status} → ${l.status} since your last check` };
+    }
+    if (prev.net !== l.net) {
+      const d = Date.parse(l.net) - Date.parse(prev.net);
+      const mins = Math.round(Math.abs(d) / 60000);
+      const h = Math.floor(mins / 60), m = mins % 60;
+      const span = (h ? h + "h " : "") + (m || !h ? m + "m" : "");
+      return { cls: "info", text: `T-0 slipped ${d > 0 ? "later" : "earlier"} by ${span} since your last check` };
+    }
+    const delta = pct - prev.pct;
+    if (Math.abs(delta) >= 3) {
+      return { cls: delta > 0 ? "up" : "down", text: `${delta > 0 ? "▲ Up" : "▼ Down"} ${Math.abs(delta)} pts since your last check` };
+    }
+    return { cls: "info", text: "No change since your last check" };
+  }
+
+  function paintVerdict({ pct, big, sub, foot, change }) {
+    const theme = pctTheme(pct);
+    const pctEl = $("verdictPct");
+    pctEl.style.setProperty("--pct-color", theme.color);
+    pctEl.style.setProperty("--pct-glow", theme.glow);
+    pctEl.innerHTML = `${pct}<span class="verdict-pct-unit">%</span>`;
+    $("verdictBig").textContent = big;
+    $("verdictSub").innerHTML = sub;
+    $("verdictFoot").textContent = foot;
+    const chg = $("verdictChange");
+    if (change) {
+      chg.className = "verdict-change " + change.cls;
+      chg.textContent = change.text;
+      chg.hidden = false;
+    } else {
+      chg.hidden = true;
+    }
+    requestAnimationFrame(() => { $("verdictFill").style.width = pct + "%"; });
+  }
+
   /* ---------- THE VERDICT ---------- */
-  function renderVerdict(launches) {
-    const tripLaunches = launches.filter(inTrip);
-    const n = tripLaunches.length;
-    const goNow = tripLaunches.filter((l) => l.status === "GO").length;
+  async function renderVerdict(launches) {
+    const trip = launches
+      .filter(inTrip)
+      .filter((l) => !isNaN(Date.parse(l.net)))
+      .sort((a, b) => Date.parse(a.net) - Date.parse(b.net));
 
-    // the launch sitting just BEFORE the window — the one that could slip in
-    const before = launches
-      .filter((l) => { const t = Date.parse(l.net); return !isNaN(t) && t < TRIP_START; })
-      .sort((a, b) => Date.parse(b.net) - Date.parse(a.net))[0];
-
-    let big, sub, pct;
-    if (n === 0) {
-      big = "NOTHING FIRM… YET 🤞";
-      pct = 45;
+    // Nothing in the window: fall back to the "might slip in" framing.
+    if (!trip.length) {
+      const before = launches
+        .filter((l) => { const t = Date.parse(l.net); return !isNaN(t) && t < TRIP_START; })
+        .sort((a, b) => Date.parse(b.net) - Date.parse(a.net))[0];
+      let sub;
       if (before) {
         const { date, time } = fmtDate(before.net);
         sub =
           `No launch is officially on the schedule for <b>5–10 July</b> right now. ` +
-          `<b>BUT</b> — <b>${before.name}</b> (${before.rocket}) is currently slated for ` +
-          `<b>${date}, ${time}</b>, just before the lads land… and Cape rockets slip <em>constantly</em>. ` +
-          `One scrub for weather or a boat in the water and it bumps straight into the window. Keep the faith. 🙏`;
+          `<b>BUT</b> — <b>${before.name}</b> (${before.rocket}) is slated for <b>${date}, ${time}</b>, ` +
+          `just before the lads land… and Cape rockets slip <em>constantly</em>. One scrub and it bumps ` +
+          `straight into the window. Keep the faith. 🙏`;
       } else {
         sub =
-          `No launch is officially on the schedule for <b>5–10 July</b> just yet — but this is ` +
-          `Cape Canaveral, where rockets pop onto the manifest like buses. Keep refreshing, keep hoping.`;
+          `No launch is officially on the schedule for <b>5–10 July</b> just yet — but this is Cape ` +
+          `Canaveral, where rockets pop onto the manifest like buses. Keep refreshing, keep hoping.`;
       }
-    } else if (n === 1) {
-      big = "ODDS: NOT BAD 🤞";
-      pct = 60;
-      sub =
-        `There's <b>1 launch</b> currently penciled in while you're in town. One scrub and it's gone, ` +
-        `so cross everything and have a backup plan involving a theme park.`;
-    } else {
-      big = "LOOKING GOOD 🚀🔥";
-      pct = Math.min(94, 66 + n * 6);
-      sub =
-        `<b>${n} launches</b> are currently targeting your window` +
-        (goNow ? ` (${goNow} already flagged GO)` : "") +
-        `. Point your phone at the sky and prepare to overreact.`;
+      paintVerdict({
+        pct: 30, big: "NOTHING FIRM… YET 🤞", sub,
+        foot: "Nothing scheduled in window · 5–10 July 2026 · Cape Canaveral & Kennedy Space Center",
+        change: null,
+      });
+      return;
     }
 
-    $("verdictBig").textContent = big;
-    $("verdictSub").innerHTML = sub;
-    $("verdictFoot").textContent =
-      n > 0
-        ? `${n} launch${n > 1 ? "es" : ""} in window · 5–10 July 2026 · Cape Canaveral & Kennedy Space Center`
-        : "Nothing scheduled in window · 5–10 July 2026 · Cape Canaveral & Kennedy Space Center";
-    requestAnimationFrame(() => { $("verdictFill").style.width = pct + "%"; });
+    const primary = trip[0];
+
+    // Interim state while the weather call is in flight.
+    $("verdictBig").textContent = "READING THE SKIES…";
+    $("verdictSub").innerHTML =
+      `Pulling the launch-hour forecast over ${padCoords(primary).lat.toFixed(2)}°N and crunching the odds for <b>${primary.name}</b>…`;
+
+    const wx = await fetchWeather(primary);
+    const L = likelihood(primary, wx);
+    const theme = pctTheme(L.pct);
+
+    paintVerdict({
+      pct: L.pct,
+      big: theme.big,
+      sub: commentary(primary, L, trip.length - 1),
+      foot: `${trip.length} launch${trip.length > 1 ? "es" : ""} in window · confidence = schedule × weather × window · unofficial estimate`,
+      change: changeNote(primary, L.pct),
+    });
   }
 
   /* ---------- 7. CARDS ---------- */
@@ -406,7 +607,7 @@
     $("feedLabel").textContent = live ? "live feed · LL2" : "curated manifest";
 
     renderNext(launches[0]);
-    renderVerdict(launches);
+    renderVerdict(launches);        // async: paints an interim state, then the weather-backed verdict
     renderStats(launches);
     renderFilters();
     renderTimeline();
