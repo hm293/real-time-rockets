@@ -341,46 +341,34 @@
   // Combine schedule confidence × weather-go × window into a single %.
   // Every input is transparent so the commentary can explain the number.
   function likelihood(l, wx) {
+    // The three top-level drivers. Each is a 0..1 favourability, and they
+    // multiply to the headline % — so the three bars literally explain the number.
     const sched = SCHED_CONF[l.status] ?? 0.4;
-    const windowF = l.window === "Open window" ? 1.05 : 0.96;
+    const windowFav = l.window === "Open window" ? 1.0 : 0.85;
 
-    if (!wx) {
-      const pct = Math.round(clamp(sched * windowF, 0.03, 0.97) * 100);
-      return { pct, sched, weatherGo: null, wx: null, worst: null, factors: null };
+    let weatherGo = null, worst = null;
+    if (wx) {
+      // Weather itself is a blend of four sub-factors (kept for the "why" line).
+      const F = [
+        { key: "storms", label: "Storms", p: clamp((wx.cape - 500) / 2000),
+          hi: "storm energy is building (the classic Florida afternoon-storm risk)" },
+        { key: "rain", label: "Rain", p: clamp((wx.precip - 15) / 55),
+          hi: "there's a real chance of rain through the window" },
+        { key: "wind", label: "Wind", p: clamp((wx.gust - 25) / 15),
+          hi: "surface winds are gusting near the limit" },
+        { key: "cloud", label: "Cloud", p: clamp((wx.cloud - 60) / 40),
+          hi: "thick cloud cover could trip the cloud rules" },
+      ];
+      const W = { storms: 0.35, rain: 0.3, wind: 0.25, cloud: 0.1 };
+      const violation = F.reduce((s, f) => s + W[f.key] * f.p, 0);
+      weatherGo = clamp(1 - violation, 0.05, 0.98);
+      // watch-item ranked by weighted contribution, not raw value
+      worst = F.slice().sort((a, b) => W[b.key] * b.p - W[a.key] * a.p)[0];
     }
-    // Each factor → a 0..1 "probability of violation", ramped over its danger band.
-    const F = [
-      { key: "storms", label: "Storms", p: clamp((wx.cape - 500) / 2000),
-        value: `CAPE ${Math.round(wx.cape)} J/kg`,
-        hi: "storm energy is building (the classic Florida afternoon-storm risk)",
-        ok: "there's barely any storm energy" },
-      { key: "rain", label: "Rain", p: clamp((wx.precip - 15) / 55),
-        value: `${Math.round(wx.precip)}% chance`,
-        hi: "there's a real chance of rain through the window",
-        ok: "almost no rain in the forecast" },
-      { key: "wind", label: "Wind", p: clamp((wx.gust - 25) / 15),
-        value: `gusts ${Math.round(wx.gust)} kn`,
-        hi: "surface winds are gusting near the limit",
-        ok: "surface winds are light" },
-      { key: "cloud", label: "Cloud", p: clamp((wx.cloud - 60) / 40),
-        value: `${Math.round(wx.cloud)}% cover`,
-        hi: "thick cloud cover could trip the cloud rules",
-        ok: "skies are mostly clear" },
-    ];
-    const W = { storms: 0.35, rain: 0.3, wind: 0.25, cloud: 0.1 };
-    const violation = F.reduce((s, f) => s + W[f.key] * f.p, 0);
-    const weatherGo = clamp(1 - violation, 0.05, 0.98);
-    // rank the watch-item by weighted contribution, not raw value — a 100% cloud
-    // (low weight) shouldn't outrank moderate storm energy (high weight).
-    const worst = F.slice().sort((a, b) => W[b.key] * b.p - W[a.key] * a.p)[0];
-    const pct = Math.round(clamp(sched * weatherGo * windowF, 0.03, 0.97) * 100);
-    // Per-factor breakdown for the visual: favourability % + traffic-light band.
-    const band = (p) => (p <= 0.25 ? "green" : p <= 0.55 ? "amber" : "red");
-    const factors = F.map((f) => ({
-      label: f.label, value: f.value,
-      favPct: Math.round((1 - f.p) * 100), band: band(f.p),
-    }));
-    return { pct, sched, weatherGo, wx, worst, factors };
+    // No live weather → treat weather as neutral (unknown), don't penalise.
+    const wEff = weatherGo == null ? 1.0 : weatherGo;
+    const pct = Math.round(clamp(sched * wEff * windowFav, 0.03, 0.97) * 100);
+    return { pct, sched, weatherGo, windowFav, wx, worst };
   }
 
   // Colour + glow for a per-launch certainty number.
@@ -428,17 +416,40 @@
     return `${status}, ${weather}. And ${win}.`;
   }
 
-  // The four coloured factor bars for one launch.
-  function factorsHTML(L) {
-    if (!L.factors) return "";
-    return `<div class="factors">` + L.factors.map((f) =>
-      `<div class="factor ${f.band}">` +
+  const bandFromFav = (f) => (f >= 0.75 ? "green" : f >= 0.45 ? "amber" : "red");
+
+  const statusWord = (s) =>
+    ({ GO: "Go for launch", NET: "To be confirmed", TBD: "Date placeholder", HOLD: "On hold" }[s] || "On manifest");
+
+  function weatherWord(L) {
+    if (L.weatherGo == null) return "no live data";
+    if (L.weatherGo >= 0.85) return "Green light";
+    if (L.weatherGo >= 0.7) return `${L.worst.label} watch`;
+    return `${L.worst.label} risk`;
+  }
+
+  // The three top-level drivers — Schedule × Weather × Window — as coloured bars.
+  function factorsHTML(l, L) {
+    const rows = [
+      { label: "Schedule", fav: L.sched, band: bandFromFav(L.sched), value: statusWord(l.status) },
+      { label: "Weather",
+        fav: L.weatherGo,
+        band: L.weatherGo == null ? "muted"
+          : L.weatherGo >= 0.85 ? "green" : L.weatherGo >= 0.7 ? "amber" : "red",
+        value: weatherWord(L) },
+      { label: "Window", fav: L.windowFav, band: bandFromFav(L.windowFav),
+        value: l.window === "Open window" ? "multi-hour" : "instantaneous" },
+    ];
+    return `<div class="factors">` + rows.map((f) => {
+      const pctTxt = f.fav == null ? "—" : `${Math.round(f.fav * 100)}%`;
+      const w = f.fav == null ? 0 : Math.round(f.fav * 100);
+      return `<div class="factor ${f.band}">` +
         `<span class="f-label">${f.label}</span>` +
-        `<div class="f-track"><i style="width:${f.favPct}%"></i></div>` +
-        `<span class="f-pct">${f.favPct}%</span>` +
+        `<div class="f-track"><i style="width:${w}%"></i></div>` +
+        `<span class="f-pct">${pctTxt}</span>` +
         `<span class="f-val">${f.value}</span>` +
-      `</div>`
-    ).join("") + `</div>`;
+      `</div>`;
+    }).join("") + `</div>`;
   }
 
   // One launch's whole block: header + certainty % + reason + factor bars + change chip.
@@ -457,7 +468,7 @@
           <div class="vlaunch-pct" style="--pct-color:${c.color};--pct-glow:${c.glow}">${L.pct}<span>%</span></div>
         </div>
         <p class="vlaunch-reason">${reasonLine(l, L)}</p>
-        ${factorsHTML(L)}
+        ${factorsHTML(l, L)}
         ${chg}
       </article>`;
   }
@@ -539,8 +550,8 @@
     const n = trip.length;
     $("verdictBig").textContent = verdictHeadline(best);
     $("verdictSub").innerHTML =
-      `<b>${n}</b> launch${n > 1 ? "es are" : " is"} targeting your window — here's how each stacks up, ` +
-      `with the four weather factors driving each score:`;
+      `<b>${n}</b> launch${n > 1 ? "es are" : " is"} targeting your window — here's how each stacks up. ` +
+      `Each score is <b>schedule × weather × window</b>:`;
     box.innerHTML = results.map((r) => launchCardHTML(r.l, r.L, r.change)).join("");
     $("verdictFoot").textContent =
       `certainty per launch = schedule × weather × window · unofficial estimate`;
