@@ -203,6 +203,19 @@
     return { date, time };
   }
 
+  // Local Eastern time — what the lads will actually experience on the coast.
+  function fmtLocalET(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return { date: "Date TBD", time: "" };
+    const date = d.toLocaleDateString("en-US", {
+      weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York",
+    });
+    const time = d.toLocaleTimeString("en-US", {
+      hour: "2-digit", minute: "2-digit", timeZone: "America/New_York",
+    });
+    return { date, time };
+  }
+
   function chip(text, cls = "") {
     return `<span class="chip ${cls}">${text}</span>`;
   }
@@ -333,20 +346,24 @@
 
     if (!wx) {
       const pct = Math.round(clamp(sched * windowF, 0.03, 0.97) * 100);
-      return { pct, sched, weatherGo: null, wx: null, worst: null };
+      return { pct, sched, weatherGo: null, wx: null, worst: null, factors: null };
     }
     // Each factor → a 0..1 "probability of violation", ramped over its danger band.
     const F = [
-      { key: "storms", p: clamp((wx.cape - 500) / 2000),
+      { key: "storms", label: "Storms", p: clamp((wx.cape - 500) / 2000),
+        value: `CAPE ${Math.round(wx.cape)} J/kg`,
         hi: "storm energy is building (the classic Florida afternoon-storm risk)",
         ok: "there's barely any storm energy" },
-      { key: "rain", p: clamp((wx.precip - 15) / 55),
+      { key: "rain", label: "Rain", p: clamp((wx.precip - 15) / 55),
+        value: `${Math.round(wx.precip)}% chance`,
         hi: "there's a real chance of rain through the window",
         ok: "almost no rain in the forecast" },
-      { key: "wind", p: clamp((wx.gust - 25) / 15),
+      { key: "wind", label: "Wind", p: clamp((wx.gust - 25) / 15),
+        value: `gusts ${Math.round(wx.gust)} kn`,
         hi: "surface winds are gusting near the limit",
         ok: "surface winds are light" },
-      { key: "cloud", p: clamp((wx.cloud - 60) / 40),
+      { key: "cloud", label: "Cloud", p: clamp((wx.cloud - 60) / 40),
+        value: `${Math.round(wx.cloud)}% cover`,
         hi: "thick cloud cover could trip the cloud rules",
         ok: "skies are mostly clear" },
     ];
@@ -357,58 +374,92 @@
     // (low weight) shouldn't outrank moderate storm energy (high weight).
     const worst = F.slice().sort((a, b) => W[b.key] * b.p - W[a.key] * a.p)[0];
     const pct = Math.round(clamp(sched * weatherGo * windowF, 0.03, 0.97) * 100);
-    return { pct, sched, weatherGo, wx, worst };
+    // Per-factor breakdown for the visual: favourability % + traffic-light band.
+    const band = (p) => (p <= 0.25 ? "green" : p <= 0.55 ? "amber" : "red");
+    const factors = F.map((f) => ({
+      label: f.label, value: f.value,
+      favPct: Math.round((1 - f.p) * 100), band: band(f.p),
+    }));
+    return { pct, sched, weatherGo, wx, worst, factors };
   }
 
-  // Colour band for the headline number.
-  function pctTheme(pct) {
-    if (pct >= 80) return { color: "var(--go)", glow: "rgba(74,222,128,0.45)", big: "STRAP IN — THIS LOOKS LIVE 🚀🔥" };
-    if (pct >= 60) return { color: "var(--gold)", glow: "rgba(255,209,102,0.45)", big: "DECENT ODDS, LADS 🤞" };
-    if (pct >= 40) return { color: "var(--gold)", glow: "rgba(255,209,102,0.4)", big: "GENUINELY A COIN FLIP 🪙" };
-    return { color: "var(--hot)", glow: "rgba(255,107,74,0.45)", big: "LONG SHOT… BUT NOT ZERO 🌠" };
+  // Colour + glow for a per-launch certainty number.
+  function pctColor(pct) {
+    if (pct >= 75) return { color: "var(--go)", glow: "rgba(74,222,128,0.45)" };
+    if (pct >= 50) return { color: "var(--gold)", glow: "rgba(255,209,102,0.45)" };
+    if (pct >= 35) return { color: "var(--gold)", glow: "rgba(255,209,102,0.4)" };
+    return { color: "var(--hot)", glow: "rgba(255,107,74,0.45)" };
   }
 
-  // Plain-English "why" for the number.
-  function commentary(l, L, otherCount) {
-    const b = brandOf(l.provider).name;
-    const { date, time } = fmtDate(l.net);
-    const statusClause =
-      l.status === "GO" ? `<b>${b}</b> has <b>${l.name}</b> flagged <b>GO</b>`
-      : l.status === "NET" ? `<b>${b}</b>'s <b>${l.name}</b> is on the schedule but still <b>to-be-confirmed</b>`
-      : l.status === "TBD" ? `<b>${l.name}</b>'s date is still a rough placeholder (<b>TBD</b>)`
-      : l.status === "HOLD" ? `<b>${l.name}</b> is currently on <b>hold</b>`
-      : `<b>${l.name}</b> is on the manifest`;
+  // Written, number-free headline for the whole panel, keyed off the best launch.
+  function verdictHeadline(best) {
+    if (best >= 75) return "LOOKING GOOD 🚀🔥";
+    if (best >= 55) return "DECENT SHOUT, LADS 🤞";
+    if (best >= 40) return "GENUINELY A COIN FLIP 🪙";
+    return "LONG SHOTS — BUT NOT ZERO 🌠";
+  }
 
-    let weatherClause, readout = "";
+  // Short per-launch "why" (status + weather headline + window). No number.
+  function reasonLine(l, L) {
+    const status =
+      l.status === "GO" ? "It's flagged <b>GO</b>"
+      : l.status === "NET" ? "It's on the schedule but still <b>to-be-confirmed</b>"
+      : l.status === "TBD" ? "The date's still a <b>rough placeholder</b> (TBD)"
+      : l.status === "HOLD" ? "It's currently on <b>hold</b>"
+      : "It's on the manifest";
+
+    let weather;
     if (!L.wx) {
-      weatherClause = `though live weather wasn't available, so this is the schedule signal alone.`;
+      weather = "and live weather wasn't available, so this is the schedule signal only";
+    } else if (L.weatherGo >= 0.85) {
+      weather = L.worst.p >= 0.5
+        ? `and the forecast is largely green — the one watch-item is that ${L.worst.hi}`
+        : "and the launch-hour forecast is a green light";
+    } else if (L.weatherGo >= 0.7) {
+      weather = `but keep an eye on the weather — ${L.worst.hi}`;
     } else {
-      const w = L.wx;
-      readout =
-        `<span class="wx-readout">launch-hour forecast · gusts ~${Math.round(w.gust)} kn · ` +
-        `${Math.round(w.precip)}% rain · CAPE ${Math.round(w.cape)} J/kg · ` +
-        `${Math.round(w.cloud)}% cloud</span>`;
-      if (L.weatherGo >= 0.85) {
-        weatherClause = L.worst.p >= 0.5
-          ? `and the forecast is largely a green light — the only real watch-item is that ${L.worst.hi}.`
-          : `and the launch-hour forecast is a green light: light winds, low storm energy and little rain.`;
-      } else if (L.weatherGo >= 0.7) {
-        weatherClause = `and weather is mostly cooperative — main watch-item: ${L.worst.hi}.`;
-      } else {
-        weatherClause = `but weather is a genuine risk here — ${L.worst.hi}.`;
-      }
+      weather = `and weather is a genuine risk — ${L.worst.hi}`;
     }
 
-    const windowClause =
-      l.window === "Open window"
-        ? `The multi-hour window helps — if something hiccups they get several cracks at it.`
-        : `It's an instantaneous window though, so it's essentially one shot.`;
+    const win = l.window === "Open window"
+      ? "the multi-hour window gives several cracks at it"
+      : "it's an instantaneous window, so one shot";
 
-    const bonus = otherCount > 0
-      ? ` And that's not your only chance — <b>${otherCount}</b> more launch${otherCount > 1 ? "es are" : " is"} also targeting your window.`
-      : "";
+    return `${status}, ${weather}. And ${win}.`;
+  }
 
-    return `${statusClause} for <b>${date}, ${time}</b>, ${weatherClause} ${windowClause}${bonus}${readout ? "<br>" + readout : ""}`;
+  // The four coloured factor bars for one launch.
+  function factorsHTML(L) {
+    if (!L.factors) return "";
+    return `<div class="factors">` + L.factors.map((f) =>
+      `<div class="factor ${f.band}">` +
+        `<span class="f-label">${f.label}</span>` +
+        `<div class="f-track"><i style="width:${f.favPct}%"></i></div>` +
+        `<span class="f-pct">${f.favPct}%</span>` +
+        `<span class="f-val">${f.value}</span>` +
+      `</div>`
+    ).join("") + `</div>`;
+  }
+
+  // One launch's whole block: header + certainty % + reason + factor bars + change chip.
+  function launchCardHTML(l, L, change) {
+    const c = pctColor(L.pct);
+    const { date, time } = fmtLocalET(l.net);
+    const chg = change
+      ? `<div class="vlaunch-change ${change.cls}">${change.text}</div>` : "";
+    return `
+      <article class="vlaunch">
+        <div class="vlaunch-head">
+          <div class="vlaunch-id">
+            <div class="vlaunch-name">${l.name}<span class="vl-status ${l.status}">${l.status}</span></div>
+            <div class="vlaunch-when">${l.rocket} · ${date}, ${time} ET</div>
+          </div>
+          <div class="vlaunch-pct" style="--pct-color:${c.color};--pct-glow:${c.glow}">${L.pct}<span>%</span></div>
+        </div>
+        <p class="vlaunch-reason">${reasonLine(l, L)}</p>
+        ${factorsHTML(L)}
+        ${chg}
+      </article>`;
   }
 
   // Remember the last reading per launch so we can flag movement between visits.
@@ -436,34 +487,15 @@
     return { cls: "info", text: "No change since your last check" };
   }
 
-  function paintVerdict({ pct, big, sub, foot, change }) {
-    const theme = pctTheme(pct);
-    const pctEl = $("verdictPct");
-    pctEl.style.setProperty("--pct-color", theme.color);
-    pctEl.style.setProperty("--pct-glow", theme.glow);
-    pctEl.innerHTML = `${pct}<span class="verdict-pct-unit">%</span>`;
-    $("verdictBig").textContent = big;
-    $("verdictSub").innerHTML = sub;
-    $("verdictFoot").textContent = foot;
-    const chg = $("verdictChange");
-    if (change) {
-      chg.className = "verdict-change " + change.cls;
-      chg.textContent = change.text;
-      chg.hidden = false;
-    } else {
-      chg.hidden = true;
-    }
-    requestAnimationFrame(() => { $("verdictFill").style.width = pct + "%"; });
-  }
-
   /* ---------- THE VERDICT ---------- */
   async function renderVerdict(launches) {
+    const box = $("verdictLaunches");
     const trip = launches
       .filter(inTrip)
       .filter((l) => !isNaN(Date.parse(l.net)))
       .sort((a, b) => Date.parse(a.net) - Date.parse(b.net));
 
-    // Nothing in the window: fall back to the "might slip in" framing.
+    // Nothing in the window: written verdict only, no launch cards.
     if (!trip.length) {
       const before = launches
         .filter((l) => { const t = Date.parse(l.net); return !isNaN(t) && t < TRIP_START; })
@@ -481,32 +513,37 @@
           `No launch is officially on the schedule for <b>5–10 July</b> just yet — but this is Cape ` +
           `Canaveral, where rockets pop onto the manifest like buses. Keep refreshing, keep hoping.`;
       }
-      paintVerdict({
-        pct: 30, big: "NOTHING FIRM… YET 🤞", sub,
-        foot: "Nothing scheduled in window · 5–10 July 2026 · Cape Canaveral & Kennedy Space Center",
-        change: null,
-      });
+      $("verdictBig").textContent = "NOTHING FIRM… YET 🤞";
+      $("verdictSub").innerHTML = sub;
+      box.innerHTML = "";
+      $("verdictFoot").textContent =
+        "Nothing scheduled in window · 5–10 July 2026 · Cape Canaveral & Kennedy Space Center";
       return;
     }
 
-    const primary = trip[0];
-
-    // Interim state while the weather call is in flight.
+    // Interim state while each launch's forecast is fetched.
     $("verdictBig").textContent = "READING THE SKIES…";
+    $("verdictSub").innerHTML = `Pulling each launch's forecast and scoring it…`;
+    box.innerHTML = trip
+      .map((l) => `<div class="vlaunch skeleton">Scoring <b>${l.name}</b>…</div>`)
+      .join("");
+
+    // Each launch gets its own forecast (different day/hour → different weather).
+    const results = await Promise.all(trip.map(async (l) => {
+      const wx = await fetchWeather(l);
+      const L = likelihood(l, wx);
+      return { l, L, change: changeNote(l, L.pct) };
+    }));
+
+    const best = Math.max(...results.map((r) => r.L.pct));
+    const n = trip.length;
+    $("verdictBig").textContent = verdictHeadline(best);
     $("verdictSub").innerHTML =
-      `Pulling the launch-hour forecast over ${padCoords(primary).lat.toFixed(2)}°N and crunching the odds for <b>${primary.name}</b>…`;
-
-    const wx = await fetchWeather(primary);
-    const L = likelihood(primary, wx);
-    const theme = pctTheme(L.pct);
-
-    paintVerdict({
-      pct: L.pct,
-      big: theme.big,
-      sub: commentary(primary, L, trip.length - 1),
-      foot: `${trip.length} launch${trip.length > 1 ? "es" : ""} in window · confidence = schedule × weather × window · unofficial estimate`,
-      change: changeNote(primary, L.pct),
-    });
+      `<b>${n}</b> launch${n > 1 ? "es are" : " is"} targeting your window — here's how each stacks up, ` +
+      `with the four weather factors driving each score:`;
+    box.innerHTML = results.map((r) => launchCardHTML(r.l, r.L, r.change)).join("");
+    $("verdictFoot").textContent =
+      `certainty per launch = schedule × weather × window · unofficial estimate`;
   }
 
   /* ---------- 7. CARDS ---------- */
